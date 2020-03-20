@@ -28,4 +28,4 @@ if [[ -n "${ZOOKEEPER_CONNECT_STRING}" ]]; then
 fi
 
 # Start up NiFi
-/opt/nifi/bin/nifi.sh start
+JAVA_HOME=$(dirname $(dirname $(readlink $(readlink $(which javac))))) /opt/nifi/bin/nifi.sh start
