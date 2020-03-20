@@ -7,7 +7,7 @@
 cd $(dirname $(readlink -e $0))
 
 if [[ -f ./setup.cfg ]]; then
-  echo "Reading configuration from setup.cfg"
+  echo "[INFO] Reading configuration from setup.cfg"
   source ./setup.cfg
 fi
 
@@ -20,14 +20,15 @@ cat << __EOF__ | tee ./setup.sav
 NIFI_VERSION="${NIFI_VERSION}"
 ##############################################################################
 __EOF__
+echo "[INFO] Preserve settings used by copying setup.sav to setup.cfg"
 
 set -x
 
 cd "./nifi"
-
-if [[ ! -f "./nifi-bin.tar.gz" ]]; then
-    echo "Downloading Apache NiFi version ${NIFI_VERSION} ..."
-    wget -O "./nifi-bin.tar.gz" "http://apache.mirrors.pair.com/nifi/${NIFI_VERSION}/nifi-${NIFI_VERSION}-bin.tar.gz"
+mkdir -p packages
+if [[ ! -f "./packages/nifi-bin.tar.gz" ]]; then
+    echo "[INFO] Downloading Apache NiFi version ${NIFI_VERSION} ..."
+    wget -O ./packages/nifi-bin.tar.gz http://apache.mirrors.pair.com/nifi/${NIFI_VERSION}/nifi-${NIFI_VERSION}-bin.tar.gz
 fi
 
 vagrant up --provider=libvirt

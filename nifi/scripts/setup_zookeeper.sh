@@ -18,7 +18,7 @@ if [[ ! -f "${ZOOKEEPER_PROPERTIES_FILE}" ]]; then
     exit 1
 fi
 
-sed -pi -e '/^server.1=/d' "${ZOOKEEPER_PROPERTIES_FILE}"
+sed -ie '/^server.1=/d' "${ZOOKEEPER_PROPERTIES_FILE}"
 echo "##### NiFi Configuration #####" >>"${ZOOKEEPER_PROPERTIES_FILE}"
 count=0
 IFS=',' read -ra my_array <<<"${ZOOKEEPER_CONNECT_STRING}"
@@ -30,5 +30,6 @@ for i in "${my_array[@]}"; do
     if [[ "${HOSTNAME}" == "${server}" ]]; then
         mkdir -p /opt/nifi/state/zookeeper
         echo "${count}" >/opt/nifi/state/zookeeper/myid
+        chown nifi:nifi /opt/nifi/state/zookeeper /opt/nifi/state/zookeeper/myid
     fi
 done

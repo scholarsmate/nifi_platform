@@ -3,4 +3,3 @@
 - "systemctl disable firewalld && sudo systemctl stop firewalld"
 - "sed -i --follow-symlinks 's/^SELINUX=.*/SELINUX=disabled/g' /etc/sysconfig/selinux"
 - "yum update -y"
-- "useradd nifi && cd /opt && tar xvfz /vagrant/nifi-*.tar.gz && chown nifi:nifi /opt/nifi-* && ln -s /opt/nifi-* /opt/nifi"

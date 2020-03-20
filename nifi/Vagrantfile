@@ -39,7 +39,11 @@ RESIZE_VOLUME_GROUP_SCRIPT
 
 # Using yaml to load external configuration files
 require 'yaml'
+
+cwd = Dir.pwd.split("/").last
+username = ENV['USER']
 domain_prefix = "#{username}-#{cwd}"
+
 Vagrant.configure("2") do |config|
   # Using the hostmanager vagrant plugin to update the host files
   config.hostmanager.enabled = true
@@ -48,13 +52,13 @@ Vagrant.configure("2") do |config|
   config.hostmanager.ignore_private_ip = false
 
   # Loading in the list of commands that should be run when the VM is provisioned.
-  commands = YAML.load_file('commands.yaml')
+  commands = YAML.load_file('conf/commands.yaml')
   commands.each do |command|
     config.vm.provision :shell, inline: command
   end
 
   # Loading in the VM configuration information
-  servers = YAML.load_file('servers.yaml')
+  servers = YAML.load_file('conf/servers.yaml')
   servers.each do |servers| 
     config.vm.define servers["name"] do |srv|
       srv.vm.box = servers["box"] # Speciy the name of the Vagrant box file to use
@@ -67,7 +71,8 @@ Vagrant.configure("2") do |config|
       srv.vm.provider "libvirt" do |libvirt|
         libvirt.cpus = servers["cpus"] # How many CPUs to allocate to the VM
         libvirt.memory = servers["ram"] # How much memory to allocate to the VM
-        libvirt.machine_virtual_size = 100 # Storage in gigabytes
+        libvirt.machine_virtual_size = servers["storage"] # Storage in gigabytes
+        libvirt.graphics_type = "none"
         libvirt.default_prefix = "#{domain_prefix}"
         if zk_connect_string.length > 1
           is_clustered = true
@@ -76,6 +81,15 @@ Vagrant.configure("2") do |config|
         zk_connect_string += servers["name"] + ":2181"
       end
       srv.vm.provision :shell, inline: $resize_volume_group
+
+      # Configure the proxy using the "vagrant-proxyconf" plugin.
+      srv.proxy.http     = "http://10.160.17.210:3128/"
+      srv.proxy.https    = "http://10.160.17.210:3128/"
+      srv.proxy.no_proxy = "localhost,127.0.0.1"
+
+      srv.vm.synced_folder "packages", "/vagrant/packages", type: "rsync"
+
+      srv.vm.provision :shell, path: "scripts/install_nifi.sh"
       if is_clustered
         srv.vm.provision :shell, path: "scripts/setup_zookeeper.sh", env: {"ZOOKEEPER_CONNECT_STRING" => "#{zk_connect_string}"}
       else
