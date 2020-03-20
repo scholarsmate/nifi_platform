@@ -27,5 +27,5 @@ if [[ -n "${ZOOKEEPER_CONNECT_STRING}" ]]; then
     sed -ie "s/^nifi.state.management.embedded.zookeeper.start=false/nifi.state.management.embedded.zookeeper.start=true/g" "${NIFI_PROPERTIES_FILE}"
 fi
 
-# Start up NiFi
-JAVA_HOME=$(dirname $(dirname $(readlink $(readlink $(which javac))))) /opt/nifi/bin/nifi.sh start
+# Start up NiFi as the nifi user
+runuser -l nifi -c "JAVA_HOME=$(dirname $(dirname $(readlink $(readlink $(which javac))))) /opt/nifi/bin/nifi.sh start"
