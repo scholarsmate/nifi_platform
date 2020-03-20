@@ -31,5 +31,5 @@ if [[ ! -f "./packages/nifi-bin.tar.gz" ]]; then
     wget -O ./packages/nifi-bin.tar.gz http://apache.mirrors.pair.com/nifi/${NIFI_VERSION}/nifi-${NIFI_VERSION}-bin.tar.gz
 fi
 
-vagrant up --provider=libvirt
+vagrant up --provider=libvirt --no-parallel
 vagrant status
