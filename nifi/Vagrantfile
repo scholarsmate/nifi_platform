@@ -1,0 +1,88 @@
+# -*- mode: ruby -*-
+# vi: set ft=ruby :
+
+required_plugins = %w( vagrant-proxyconf vagrant-hostmanager )
+plugins_to_install = required_plugins.select { |plugin| not Vagrant.has_plugin? plugin }
+if not plugins_to_install.empty?
+  puts "Installing plugins: #{plugins_to_install.join(' ')}"
+  if system "vagrant plugin install #{plugins_to_install.join(' ')}"
+    exec "vagrant #{ARGV.join(' ')}"
+  else
+    abort "Installation of one or more plugins has failed. Aborting."
+  end
+end
+
+# Resize the root volume group online.
+$resize_volume_group = <<RESIZE_VOLUME_GROUP_SCRIPT
+set -x
+df -h /
+fdisk /dev/sda <<FDISK_EOF
+d
+2
+n
+p
+2
+
+
+t
+2
+8e
+p
+w
+FDISK_EOF
+partprobe
+pvresize /dev/sda2
+lvextend -l +100%FREE /dev/centos_centos7/root
+fsadm resize  /dev/mapper/centos_centos7-root
+df -h /
+RESIZE_VOLUME_GROUP_SCRIPT
+
+# Using yaml to load external configuration files
+require 'yaml'
+domain_prefix = "#{username}-#{cwd}"
+Vagrant.configure("2") do |config|
+  # Using the hostmanager vagrant plugin to update the host files
+  config.hostmanager.enabled = true
+  config.hostmanager.manage_host = true
+  config.hostmanager.manage_guest = true
+  config.hostmanager.ignore_private_ip = false
+
+  # Loading in the list of commands that should be run when the VM is provisioned.
+  commands = YAML.load_file('commands.yaml')
+  commands.each do |command|
+    config.vm.provision :shell, inline: command
+  end
+
+  # Loading in the VM configuration information
+  servers = YAML.load_file('servers.yaml')
+  servers.each do |servers| 
+    config.vm.define servers["name"] do |srv|
+      srv.vm.box = servers["box"] # Speciy the name of the Vagrant box file to use
+      srv.vm.hostname = servers["name"] # Set the hostname of the VM
+      srv.vm.network "private_network", ip: servers["ip"], :adapater=>2 # Add a second adapater with a specified IP
+      srv.vm.network :forwarded_port, guest: 22, host: servers["port"] # Add a port forwarding rule
+      srv.vm.provision :shell, inline: "sed -i'' '/^127.0.0.1\t#{srv.vm.hostname}\t#{srv.vm.hostname}$/d' /etc/hosts"
+      zk_connect_string = ""
+      is_clustered = false
+      srv.vm.provider "libvirt" do |libvirt|
+        libvirt.cpus = servers["cpus"] # How many CPUs to allocate to the VM
+        libvirt.memory = servers["ram"] # How much memory to allocate to the VM
+        libvirt.machine_virtual_size = 100 # Storage in gigabytes
+        libvirt.default_prefix = "#{domain_prefix}"
+        if zk_connect_string.length > 1
+          is_clustered = true
+          zk_connect_string += ","
+        end
+        zk_connect_string += servers["name"] + ":2181"
+      end
+      srv.vm.provision :shell, inline: $resize_volume_group
+      if is_clustered
+        srv.vm.provision :shell, path: "scripts/setup_zookeeper.sh", env: {"ZOOKEEPER_CONNECT_STRING" => "#{zk_connect_string}"}
+      else
+        zk_connect_string = ""
+      end
+      srv.vm.provision :shell, path: "scripts/setup_nifi.sh", env: {"ZOOKEEPER_CONNECT_STRING" => "#{zk_connect_string}"}
+    end
+  end
+end
+

@@ -1,2 +1,3 @@
-# nifi_platform
-NiFi platform creation
+# Instructions
+
+./setup.sh
