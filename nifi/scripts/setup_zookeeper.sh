@@ -30,6 +30,6 @@ for i in "${my_array[@]}"; do
     if [[ "${HOSTNAME}" == "${server}" ]]; then
         mkdir -p /opt/nifi/state/zookeeper
         echo "${count}" >/opt/nifi/state/zookeeper/myid
-        chown nifi:nifi /opt/nifi/state/zookeeper /opt/nifi/state/zookeeper/myid
+        chown -R nifi:nifi /opt/nifi/state
     fi
 done

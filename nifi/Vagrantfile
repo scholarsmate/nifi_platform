@@ -43,8 +43,9 @@ require 'yaml'
 cwd = Dir.pwd.split("/").last
 username = ENV['USER']
 domain_prefix = "#{username}-#{cwd}"
+vagrant_api_version = "2"
 
-Vagrant.configure("2") do |config|
+Vagrant.configure(vagrant_api_version) do |config|
   # Using the hostmanager vagrant plugin to update the host files
   config.hostmanager.enabled = true
   config.hostmanager.manage_host = true
@@ -59,6 +60,9 @@ Vagrant.configure("2") do |config|
 
   # Loading in the VM configuration information
   servers = YAML.load_file('conf/servers.yaml')
+  # TODO: Compute this
+  zk_connect_string = "nifi01:2128,nifi02:2128,nifi03:2128"
+  is_clustered = zk_connect_string.length > 1
   servers.each do |servers| 
     config.vm.define servers["name"] do |srv|
       srv.vm.box = servers["box"] # Speciy the name of the Vagrant box file to use
@@ -66,36 +70,33 @@ Vagrant.configure("2") do |config|
       srv.vm.network "private_network", ip: servers["ip"], :adapater=>2 # Add a second adapater with a specified IP
       srv.vm.network :forwarded_port, guest: 22, host: servers["port"] # Add a port forwarding rule
       srv.vm.provision :shell, inline: "sed -i'' '/^127.0.0.1\t#{srv.vm.hostname}\t#{srv.vm.hostname}$/d' /etc/hosts"
-      zk_connect_string = ""
-      is_clustered = false
       srv.vm.provider "libvirt" do |libvirt|
         libvirt.cpus = servers["cpus"] # How many CPUs to allocate to the VM
         libvirt.memory = servers["ram"] # How much memory to allocate to the VM
         libvirt.machine_virtual_size = servers["storage"] # Storage in gigabytes
         libvirt.graphics_type = "none"
         libvirt.default_prefix = "#{domain_prefix}"
-        if zk_connect_string.length > 1
-          is_clustered = true
-          zk_connect_string += ","
-        end
-        zk_connect_string += servers["name"] + ":2181"
+        #if zk_connect_string.length > 1
+        #  is_clustered = true
+        #  zk_connect_string += ","
+        #end
+        #zk_connect_string += "#{srv.vm.hostname}:2181"
       end
       srv.vm.provision :shell, inline: $resize_volume_group
-
       # Configure the proxy using the "vagrant-proxyconf" plugin.
       srv.proxy.http     = "http://10.160.17.210:3128/"
       srv.proxy.https    = "http://10.160.17.210:3128/"
-      srv.proxy.no_proxy = "localhost,127.0.0.1"
+      srv.proxy.no_proxy = "localhost,127.0.0.1,192.168.0.0/16"
 
       srv.vm.synced_folder "packages", "/vagrant/packages", type: "rsync"
 
       srv.vm.provision :shell, path: "scripts/install_nifi.sh"
       if is_clustered
         srv.vm.provision :shell, path: "scripts/setup_zookeeper.sh", env: {"ZOOKEEPER_CONNECT_STRING" => "#{zk_connect_string}"}
+        srv.vm.provision :shell, path: "scripts/setup_nifi.sh", env: {"ZOOKEEPER_CONNECT_STRING" => "#{zk_connect_string}"}
       else
-        zk_connect_string = ""
+        srv.vm.provision :shell, path: "scripts/setup_nifi.sh", env: {"ZOOKEEPER_CONNECT_STRING" => ""}
       end
-      srv.vm.provision :shell, path: "scripts/setup_nifi.sh", env: {"ZOOKEEPER_CONNECT_STRING" => "#{zk_connect_string}"}
     end
   end
 end
