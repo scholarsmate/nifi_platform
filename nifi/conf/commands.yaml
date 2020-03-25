@@ -1,5 +1,0 @@
-- "yum -y install net-tools chrony wget java-1.8.0-openjdk java-1.8.0-openjdk-devel"
-- "systemctl enable chronyd && sudo systemctl start chronyd"
-- "systemctl disable firewalld && sudo systemctl stop firewalld"
-- "sed -i --follow-symlinks 's/^SELINUX=.*/SELINUX=disabled/g' /etc/sysconfig/selinux"
-- "yum update -y"

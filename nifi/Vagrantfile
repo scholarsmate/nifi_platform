@@ -42,8 +42,17 @@ require 'yaml'
 
 cwd = Dir.pwd.split("/").last
 username = ENV['USER']
+node_count = ENV['NODE_COUNT'] || 3
+node_count = node_count.to_i
 domain_prefix = "#{username}-#{cwd}"
 vagrant_api_version = "2"
+zk_connect_string = ""
+(1..node_count).each do |i|
+  if zk_connect_string.length > 1
+    zk_connect_string += ","
+  end
+  zk_connect_string += "nifi0#{i}:2181"
+end
 
 Vagrant.configure(vagrant_api_version) do |config|
   # Using the hostmanager vagrant plugin to update the host files
@@ -51,53 +60,36 @@ Vagrant.configure(vagrant_api_version) do |config|
   config.hostmanager.manage_host = true
   config.hostmanager.manage_guest = true
   config.hostmanager.ignore_private_ip = false
-
-  # Loading in the list of commands that should be run when the VM is provisioned.
-  commands = YAML.load_file('conf/commands.yaml')
-  commands.each do |command|
-    config.vm.provision :shell, inline: command
-  end
-
-  # Loading in the VM configuration information
-  servers = YAML.load_file('conf/servers.yaml')
-  # TODO: Compute this
-  zk_connect_string = "nifi01:2128,nifi02:2128,nifi03:2128"
-  is_clustered = zk_connect_string.length > 1
-  servers.each do |servers| 
-    config.vm.define servers["name"] do |srv|
-      srv.vm.box = servers["box"] # Speciy the name of the Vagrant box file to use
-      srv.vm.hostname = servers["name"] # Set the hostname of the VM
-      srv.vm.network "private_network", ip: servers["ip"], :adapater=>2 # Add a second adapater with a specified IP
-      srv.vm.network :forwarded_port, guest: 22, host: servers["port"] # Add a port forwarding rule
+  (1..node_count).each do |i| 
+    config.vm.define "nifi0#{i}" do |srv|
+      srv.vm.box = "generic/centos7" # Speciy the name of the Vagrant box file to use
+      srv.vm.hostname = "nifi0#{i}" # Set the hostname of the VM
+      srv.vm.network "private_network", ip: "192.168.56.#{i + 100}", :adapater=>2 # Add a second adapater with a specified IP
+      srv.vm.network :forwarded_port, guest: 22, host: "#{i * 100 + 10022}" # Add a port forwarding rule
       srv.vm.provision :shell, inline: "sed -i'' '/^127.0.0.1\t#{srv.vm.hostname}\t#{srv.vm.hostname}$/d' /etc/hosts"
       srv.vm.provider "libvirt" do |libvirt|
-        libvirt.cpus = servers["cpus"] # How many CPUs to allocate to the VM
-        libvirt.memory = servers["ram"] # How much memory to allocate to the VM
-        libvirt.machine_virtual_size = servers["storage"] # Storage in gigabytes
+        libvirt.cpus = 2 # How many CPUs to allocate to the VM
+        libvirt.memory = 2048 # How much memory to allocate to the VM
+        libvirt.machine_virtual_size = 80 # Storage in gigabytes
         libvirt.graphics_type = "none"
         libvirt.default_prefix = "#{domain_prefix}"
-        #if zk_connect_string.length > 1
-        #  is_clustered = true
-        #  zk_connect_string += ","
-        #end
-        #zk_connect_string += "#{srv.vm.hostname}:2181"
       end
       srv.vm.provision :shell, inline: $resize_volume_group
       # Configure the proxy using the "vagrant-proxyconf" plugin.
       srv.proxy.http     = "http://10.160.17.210:3128/"
       srv.proxy.https    = "http://10.160.17.210:3128/"
       srv.proxy.no_proxy = "localhost,127.0.0.1,192.168.0.0/16"
-
       srv.vm.synced_folder "packages", "/vagrant/packages", type: "rsync"
-
+      srv.vm.provision :shell, path: "scripts/bootstrap.sh"
       srv.vm.provision :shell, path: "scripts/install_nifi.sh"
-      if is_clustered
+      if node_count > 1
+        puts "**** CLUSTERED #{zk_connect_string}"
         srv.vm.provision :shell, path: "scripts/setup_zookeeper.sh", env: {"ZOOKEEPER_CONNECT_STRING" => "#{zk_connect_string}"}
         srv.vm.provision :shell, path: "scripts/setup_nifi.sh", env: {"ZOOKEEPER_CONNECT_STRING" => "#{zk_connect_string}"}
       else
+        puts "**** NOT-CLUSTERED #{zk_connect_string}"
         srv.vm.provision :shell, path: "scripts/setup_nifi.sh", env: {"ZOOKEEPER_CONNECT_STRING" => ""}
       end
     end
   end
 end
-

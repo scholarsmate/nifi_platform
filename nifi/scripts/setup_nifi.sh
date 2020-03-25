@@ -14,6 +14,7 @@ if [[ ! -f "${NIFI_PROPERTIES_FILE}" ]]; then
     exit 1
 fi
 
+sed -ie "s/^nifi.web.http.host=/nifi.web.http.host=${HOSTNAME}/g" "${NIFI_PROPERTIES_FILE}"
 sed -ie "s/^nifi.web.proxy.host=/nifi.web.proxy.host=${HOSTNAME}/g" "${NIFI_PROPERTIES_FILE}"
 sed -ie "s/^nifi.remote.input.host=/nifi.remote.input.host=${HOSTNAME}/g" "${NIFI_PROPERTIES_FILE}"
 sed -ie "s/^nifi.remote.input.socket.port=/nifi.remote.input.socket.port=9998/g" "${NIFI_PROPERTIES_FILE}"

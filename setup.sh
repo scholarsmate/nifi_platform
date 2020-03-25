@@ -12,12 +12,14 @@ if [[ -f ./setup.cfg ]]; then
 fi
 
 NIFI_VERSION=${NIFI_VERSION:-1.11.3}
+NODE_COUNT=${NODE_COUNT:-3}
 
 cat << __EOF__ | tee ./setup.sav
 ##############################################################################
 # Settings: $(date)
 ##############################################################################
 NIFI_VERSION="${NIFI_VERSION}"
+NODE_COUNT="${NODE_COUNT}"
 ##############################################################################
 __EOF__
 echo "[INFO] Preserve settings used by copying setup.sav to setup.cfg"
@@ -31,5 +33,6 @@ if [[ ! -f "./packages/nifi-bin.tar.gz" ]]; then
     wget -O ./packages/nifi-bin.tar.gz http://apache.mirrors.pair.com/nifi/${NIFI_VERSION}/nifi-${NIFI_VERSION}-bin.tar.gz
 fi
 
-vagrant up --provider=libvirt --no-parallel
+NODE_COUNT="${NODE_COUNT}" vagrant up --provider=libvirt --no-parallel
+#NODE_COUNT="${NODE_COUNT}" vagrant up --provider=libvirt
 vagrant status
